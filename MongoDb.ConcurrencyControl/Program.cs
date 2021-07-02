@@ -1,4 +1,7 @@
-﻿using MongoDB.Driver;
+﻿using MongoDb.ConcurrencyControl.Data.Models;
+using MongoDb.ConcurrencyControl.Data.Repositories;
+using MongoDB.Driver;
+using Newtonsoft.Json;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -7,105 +10,132 @@ namespace MongoDb.ConcurrencyControl
 {
     class Program
     {
+        private static readonly PersonRepository personRepository = new PersonRepository();
+        private static int ConcurrentThreads = 10;
+
         static async Task Main(string[] args)
         {
-            //await WithoutOCC();
+            await ChangeNameProblem();
 
-            //await OccWithVersion();
+            await IncrementingAgeProblem();
+
+            await OccWithVersion();
 
             await OccWithVersionAndRetry();
 
             Console.Read();
         }
 
-        private static async Task WithoutOCC()
+        private static async Task IncrementingAgeProblem()
         {
-            var document = new Counter();
-            await MongoDbContext.CounterCollection.InsertOneAsync(document);
-            Console.WriteLine($"Before  : {document.Value}");
+            var person = new Person();
+            await personRepository.Add(person);
+            Console.WriteLine($"Age Before  : {person.Age}");
 
-            var tasks = Enumerable.Range(0, 100).Select(async i =>
+            var tasks = Enumerable.Range(0, ConcurrentThreads).Select(async i =>
             {
-                var loaded = await MongoDbContext.CounterCollection.Find(doc => doc.Id == document.Id).SingleAsync();
+                var loaded = await personRepository.Get(person.Id);
 
-                loaded.Value++;
+                loaded.Age++;
 
-                long result;
-                do
-                {
-                    result = (await MongoDbContext.CounterCollection.ReplaceOneAsync(c => c.Id == document.Id, loaded,
-                        new ReplaceOptions { IsUpsert = false })).ModifiedCount;
-                } while (result != 1);
+                //Console.WriteLine($"Thread {i} age: {loaded.Age}");
 
-                return result;
+                await personRepository.Update(loaded);
             }).ToList();
 
-            var total = await Task.WhenAll(tasks);
-            document = await MongoDbContext.CounterCollection.Find(doc => doc.Id == document.Id).SingleAsync();
+            await Task.WhenAll(tasks);
 
-            Console.WriteLine($"After   : {document.Value}");
-            Console.WriteLine($"Modified: {total.Sum(r => r)}");
+            person = await personRepository.Get(person.Id);
+
+            Console.WriteLine($"Expcted Age : {tasks.Count}");
+            Console.WriteLine($"Actual Age  : {person.Age}");
+        }
+
+        private static async Task ChangeNameProblem()
+        {
+            var person = new Person
+            {
+                FirstName = "John",
+                LastName = "Smith"
+            };
+
+            await personRepository.Add(person);
+
+            var thread1 = await personRepository.Get(person.Id);
+            var thread2 = await personRepository.Get(person.Id);
+
+            thread1.FirstName = "Jane";
+
+            await personRepository.Update(person);
+
+            person = await personRepository.Get(person.Id);
+
+            thread2.LastName = "Doe";
+            await personRepository.Update(person);
+
+            person = await personRepository.Get(person.Id);
+
+            Console.WriteLine("Final Result:");
+            Console.WriteLine(JsonConvert.SerializeObject(person, Formatting.Indented));
         }
 
         private static async Task OccWithVersion()
         {
-            var document = new Counter();
-            await MongoDbContext.CounterCollection.InsertOneAsync(document);
-            Console.WriteLine($"Before  : {document.Value}");
+            var person = new Person();
+            await personRepository.Add(person);
+            Console.WriteLine($"Age Before      : {person.Age}");
 
-            var tasks = Enumerable.Range(0, 100).Select(async i =>
+            var tasks = Enumerable.Range(0, ConcurrentThreads).Select(async i =>
             {
-                var loaded = await MongoDbContext.CounterCollection.Find(doc => doc.Id == document.Id).SingleAsync();
-                var version = loaded.Version;
+                var loaded = await personRepository.Get(person.Id);
+                var currentVersion = loaded.Version;
 
-                loaded.Value++;
+                loaded.Age++;
                 loaded.Version++;
 
-                var result = await MongoDbContext.CounterCollection.ReplaceOneAsync(
-                    c => c.Id == document.Id && c.Version == version,
-                    loaded, new ReplaceOptions { IsUpsert = false });
+                return await personRepository.Update(loaded, currentVersion);
 
-                return result.ModifiedCount;
             }).ToList();
 
-            var total = await Task.WhenAll(tasks);
-            document = await MongoDbContext.CounterCollection.Find(doc => doc.Id == document.Id).SingleAsync();
+            await Task.WhenAll(tasks);
+            person = await personRepository.Get(person.Id);
 
-            Console.WriteLine($"After   : {document.Value}");
-            Console.WriteLine($"Modified: {total.Sum(r => r)}");
+            Console.WriteLine($"Actual Age      : {person.Age}");
+            Console.WriteLine($"Expected Age    : {tasks.Where(t => t.Result).Count()}");
         }
+
 
         private static async Task OccWithVersionAndRetry()
         {
-            var document = new Counter();
-            await MongoDbContext.CounterCollection.InsertOneAsync(document);
-            Console.WriteLine($"Before  : {document.Value}");
+            var person = new Person();
+            await personRepository.Add(person);
+            Console.WriteLine($"Age Before      : {person.Age}");
 
-            var tasks = Enumerable.Range(0, 100).Select(async i =>
+            var tasks = Enumerable.Range(0, ConcurrentThreads).Select(async i =>
             {
-                ReplaceOneResult result;
+                bool result;
 
                 do
                 {
-                    var loaded = await MongoDbContext.CounterCollection.Find(doc => doc.Id == document.Id).SingleAsync();
-                    var version = loaded.Version;
+                    var loaded = await personRepository.Get(person.Id);
+                    var currentVersion = loaded.Version;
 
-                    loaded.Value++;
+                    loaded.Age++;
                     loaded.Version++;
 
-                    result = await MongoDbContext.CounterCollection.ReplaceOneAsync(
-                        c => c.Id == document.Id && c.Version == version, loaded,
-                        new ReplaceOptions { IsUpsert = false });
-                } while (result.ModifiedCount != 1);
+                    //Console.WriteLine($"Thread {i} age: {loaded.Age} version: {loaded.Version}");
 
-                return result.ModifiedCount;
+                    result = await personRepository.Update(loaded, currentVersion);
+
+                } while (!result);
+
             }).ToList();
 
-            var total = await Task.WhenAll(tasks);
-            document = await MongoDbContext.CounterCollection.Find(doc => doc.Id == document.Id).SingleAsync();
+            await Task.WhenAll(tasks);
+            person = await personRepository.Get(person.Id);
 
-            Console.WriteLine($"After   : {document.Value}");
-            Console.WriteLine($"Modified: {total.Sum(r => r)}");
+            Console.WriteLine($"Actual Age      : {person.Age}");
+            Console.WriteLine($"Expected Age    : {tasks.Count}");
         }
     }
 }
