@@ -2,6 +2,7 @@
 using MongoDb.ConcurrencyControl.Data.Repositories;
 using MongoDB.Driver;
 using Newtonsoft.Json;
+using Polly;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
@@ -15,11 +16,11 @@ namespace MongoDb.ConcurrencyControl
 
         static async Task Main(string[] args)
         {
-            await ChangeNameProblem();
+            //await ChangeNameProblem();
 
-            await IncrementingAgeProblem();
+            //await IncrementingAgeProblem();
 
-            await OccWithVersion();
+            //await OccWithVersion();
 
             await OccWithVersionAndRetry();
 
@@ -104,18 +105,16 @@ namespace MongoDb.ConcurrencyControl
             Console.WriteLine($"Expected Age    : {tasks.Where(t => t.Result).Count()}");
         }
 
-
         private static async Task OccWithVersionAndRetry()
         {
             var person = new Person();
             await personRepository.Add(person);
             Console.WriteLine($"Age Before      : {person.Age}");
 
+
             var tasks = Enumerable.Range(0, ConcurrentThreads).Select(async i =>
             {
-                bool result;
-
-                do
+                await Policy.Handle<ConflictException>().RetryForeverAsync().ExecuteAsync(async () =>
                 {
                     var loaded = await personRepository.Get(person.Id);
                     var currentVersion = loaded.Version;
@@ -124,11 +123,8 @@ namespace MongoDb.ConcurrencyControl
                     loaded.Version++;
 
                     //Console.WriteLine($"Thread {i} age: {loaded.Age} version: {loaded.Version}");
-
-                    result = await personRepository.Update(loaded, currentVersion);
-
-                } while (!result);
-
+                    await personRepository.UpdateWithConflict(loaded, currentVersion);
+                });
             }).ToList();
 
             await Task.WhenAll(tasks);

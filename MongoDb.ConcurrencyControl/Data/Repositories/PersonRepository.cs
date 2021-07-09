@@ -30,5 +30,15 @@ namespace MongoDb.ConcurrencyControl.Data.Repositories
 
             return result.ModifiedCount == 1;
         }
+
+        public async Task UpdateWithConflict(Person person, int version)
+        {
+            var result = await MongoDbContext.Persons.ReplaceOneAsync(c => c.Id == person.Id && c.Version == version, person, new ReplaceOptions { IsUpsert = false });
+
+            if (result.ModifiedCount != 1)
+            {
+                throw new ConflictException();
+            }
+        }
     }
 }
