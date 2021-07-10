@@ -1,5 +1,6 @@
 ﻿using MongoDb.ConcurrencyControl.Data.Models;
 using MongoDb.ConcurrencyControl.Data.Repositories;
+using MongoDB.Concurrency.Optimistic;
 using MongoDB.Driver;
 using Newtonsoft.Json;
 using Polly;
@@ -22,7 +23,9 @@ namespace MongoDb.ConcurrencyControl
 
             //await OccWithVersion();
 
-            await OccWithVersionAndRetry();
+            //await OccWithVersionAndRetry();
+
+            await TestOptimisticCollection();
 
             Console.Read();
         }
@@ -132,6 +135,55 @@ namespace MongoDb.ConcurrencyControl
 
             Console.WriteLine($"Actual Age      : {person.Age}");
             Console.WriteLine($"Expected Age    : {tasks.Count}");
+        }
+
+        private static async Task TestOptimisticCollection()
+        {
+            var person = new Person
+            {
+                Id = Guid.NewGuid(),
+                FirstName = "Alan",
+                LastName = "Smith"
+            };
+
+            var optimisticRepo = new OptimisticCollection.PersonRepository();
+
+            Console.WriteLine("Case 1: entity does not exist and upsert is false");
+            try
+            {
+                await optimisticRepo.UpdateAsync(person, isUpsert: false);    
+            }
+            catch (MongoConcurrencyDeletedException ex)
+            {
+                Console.WriteLine($"Exception: {ex.Message}");
+            }
+
+            Console.WriteLine();
+            Console.WriteLine("Case 2: entity does not exist and upsert is true");
+            await optimisticRepo.UpdateAsync(person, isUpsert: true);
+            Console.WriteLine($"Result: inserted Person Id: {person.Id}");
+
+            Console.WriteLine();
+            Console.WriteLine("Case 3: update with no conflict");
+            person = await personRepository.Get(person.Id);
+            Console.WriteLine($"Version before update: {person.Version}");
+            person.FirstName = "Bob";
+            await optimisticRepo.UpdateAsync(person, isUpsert: false);
+            Console.WriteLine($"Version after update: {person.Version}");
+
+            Console.WriteLine();
+            Console.WriteLine("Case 4: update with conflict");
+            var personOtherThread = await personRepository.Get(person.Id);
+            personOtherThread.FirstName = "Cameron";
+            await optimisticRepo.UpdateAsync(personOtherThread, isUpsert: false);
+            try
+            {
+                await optimisticRepo.UpdateAsync(person, isUpsert: false);
+            }
+            catch (MongoConcurrencyUpdatedException ex)
+            {
+                Console.WriteLine($"Exception: {ex.Message}");
+            }
         }
     }
 }
