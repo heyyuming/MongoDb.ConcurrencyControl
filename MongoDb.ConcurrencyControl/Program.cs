@@ -1,4 +1,5 @@
-﻿using MongoDb.ConcurrencyControl.Data.Models;
+﻿using MongoDb.ConcurrencyControl.Data;
+using MongoDb.ConcurrencyControl.Data.Models;
 using MongoDb.ConcurrencyControl.Data.Repositories;
 using MongoDB.Concurrency.Optimistic;
 using MongoDB.Driver;
@@ -12,178 +13,63 @@ namespace MongoDb.ConcurrencyControl
 {
     class Program
     {
-        private static readonly PersonRepository personRepository = new PersonRepository();
-        private static int ConcurrentThreads = 10;
 
         static async Task Main(string[] args)
         {
-            //await ChangeNameProblem();
+            MongoDbContext.RegisterClassMap();
 
-            //await IncrementingAgeProblem();
-
-            //await OccWithVersion();
-
-            //await OccWithVersionAndRetry();
-
-            await TestOptimisticCollection();
+            await TestProxyWrapper();
 
             Console.Read();
         }
 
-        private static async Task IncrementingAgeProblem()
+        private async static Task TestProxyWrapper()
         {
-            var person = new Person();
-            await personRepository.Add(person);
-            Console.WriteLine($"Age Before  : {person.Age}");
-
-            var tasks = Enumerable.Range(0, ConcurrentThreads).Select(async i =>
+            IPerson person = new Person
             {
-                var loaded = await personRepository.Get(person.Id);
-
-                loaded.Age++;
-
-                //Console.WriteLine($"Thread {i} age: {loaded.Age}");
-
-                await personRepository.Update(loaded);
-            }).ToList();
-
-            await Task.WhenAll(tasks);
-
-            person = await personRepository.Get(person.Id);
-
-            Console.WriteLine($"Expcted Age : {tasks.Count}");
-            Console.WriteLine($"Actual Age  : {person.Age}");
-        }
-
-        private static async Task ChangeNameProblem()
-        {
-            var person = new Person
-            {
-                FirstName = "John",
-                LastName = "Smith"
-            };
-
-            await personRepository.Add(person);
-
-            var thread1 = await personRepository.Get(person.Id);
-            var thread2 = await personRepository.Get(person.Id);
-
-            thread1.FirstName = "Jane";
-
-            await personRepository.Update(person);
-
-            person = await personRepository.Get(person.Id);
-
-            thread2.LastName = "Doe";
-            await personRepository.Update(person);
-
-            person = await personRepository.Get(person.Id);
-
-            Console.WriteLine("Final Result:");
-            Console.WriteLine(JsonConvert.SerializeObject(person, Formatting.Indented));
-        }
-
-        private static async Task OccWithVersion()
-        {
-            var person = new Person();
-            await personRepository.Add(person);
-            Console.WriteLine($"Age Before      : {person.Age}");
-
-            var tasks = Enumerable.Range(0, ConcurrentThreads).Select(async i =>
-            {
-                var loaded = await personRepository.Get(person.Id);
-                var currentVersion = loaded.Version;
-
-                loaded.Age++;
-                loaded.Version++;
-
-                return await personRepository.Update(loaded, currentVersion);
-
-            }).ToList();
-
-            await Task.WhenAll(tasks);
-            person = await personRepository.Get(person.Id);
-
-            Console.WriteLine($"Actual Age      : {person.Age}");
-            Console.WriteLine($"Expected Age    : {tasks.Where(t => t.Result).Count()}");
-        }
-
-        private static async Task OccWithVersionAndRetry()
-        {
-            var person = new Person();
-            await personRepository.Add(person);
-            Console.WriteLine($"Age Before      : {person.Age}");
-
-
-            var tasks = Enumerable.Range(0, ConcurrentThreads).Select(async i =>
-            {
-                await Policy.Handle<ConflictException>().RetryForeverAsync().ExecuteAsync(async () =>
-                {
-                    var loaded = await personRepository.Get(person.Id);
-                    var currentVersion = loaded.Version;
-
-                    loaded.Age++;
-                    loaded.Version++;
-
-                    //Console.WriteLine($"Thread {i} age: {loaded.Age} version: {loaded.Version}");
-                    await personRepository.UpdateWithConflict(loaded, currentVersion);
-                });
-            }).ToList();
-
-            await Task.WhenAll(tasks);
-            person = await personRepository.Get(person.Id);
-
-            Console.WriteLine($"Actual Age      : {person.Age}");
-            Console.WriteLine($"Expected Age    : {tasks.Count}");
-        }
-
-        private static async Task TestOptimisticCollection()
-        {
-            var person = new Person
-            {
-                Id = Guid.NewGuid(),
+                Id = Guid.NewGuid().ToString(),
                 FirstName = "Alan",
-                LastName = "Smith"
+                LastName = "Smith",
+                Age = 20
             };
 
-            var optimisticRepo = new OptimisticCollection.PersonRepository();
+            Console.WriteLine("Test 1: insert new person");
+            person = await PersonRepository.UpsertAsync(person);
+            Console.WriteLine($"Inserted person: {PrintPerson(person)}");
 
-            Console.WriteLine("Case 1: entity does not exist and upsert is false");
+            Console.WriteLine();
+            Console.WriteLine("Test 2: update person");
+            Console.WriteLine($"Before update: {PrintPerson(person)}");
+            person.Age++;
+            person = await PersonRepository.UpsertAsync(person);
+            Console.WriteLine($"After update: {PrintPerson(person)}");
+
+            Console.WriteLine();
+            Console.WriteLine("Test 3: update conflict");
+            var thread1 = await PersonRepository.Get(person.Id);
+            var thread2 = await PersonRepository.Get(person.Id);
+
+            thread1.FirstName = "Bob";
+            thread1 = await PersonRepository.UpsertAsync(thread1);
+            Console.WriteLine($"thread 1 update: {PrintPerson(thread1)}");
+
             try
             {
-                await optimisticRepo.UpdateAsync(person, isUpsert: false);    
+                thread2.LastName = "Carter";
+                await PersonRepository.UpsertAsync(thread2);
             }
-            catch (MongoConcurrencyDeletedException ex)
+            catch (ConflictException ex)
             {
-                Console.WriteLine($"Exception: {ex.Message}");
+                Console.WriteLine($"thread 2 update: {ex.Message}");
             }
+        }
 
-            Console.WriteLine();
-            Console.WriteLine("Case 2: entity does not exist and upsert is true");
-            await optimisticRepo.UpdateAsync(person, isUpsert: true);
-            Console.WriteLine($"Result: inserted Person Id: {person.Id}");
+        private static string PrintPerson(IPerson person)
+        {
+            if (person is VersionControlProxy<IPerson> vcp)
+                return $"Version: {vcp.Version} - {JsonConvert.SerializeObject(vcp.Target)} " ;
 
-            Console.WriteLine();
-            Console.WriteLine("Case 3: update with no conflict");
-            person = await personRepository.Get(person.Id);
-            Console.WriteLine($"Version before update: {person.Version}");
-            person.FirstName = "Bob";
-            await optimisticRepo.UpdateAsync(person, isUpsert: false);
-            Console.WriteLine($"Version after update: {person.Version}");
-
-            Console.WriteLine();
-            Console.WriteLine("Case 4: update with conflict");
-            var personOtherThread = await personRepository.Get(person.Id);
-            personOtherThread.FirstName = "Cameron";
-            await optimisticRepo.UpdateAsync(personOtherThread, isUpsert: false);
-            try
-            {
-                await optimisticRepo.UpdateAsync(person, isUpsert: false);
-            }
-            catch (MongoConcurrencyUpdatedException ex)
-            {
-                Console.WriteLine($"Exception: {ex.Message}");
-            }
+            return JsonConvert.SerializeObject(person);
         }
     }
 }

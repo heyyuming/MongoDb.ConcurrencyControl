@@ -2,12 +2,19 @@
 
 namespace MongoDb.ConcurrencyControl.Data.Models
 {
-    public class Person
+    public interface IPerson
     {
-        public Guid Id { get; set; }
+        int Age { get; set; }
+        string FirstName { get; set; }
+        string Id { get; set; }
+        string LastName { get; set; }
+    }
+
+    public class Person : IPerson
+    {
+        public string Id { get; set; }
         public int Age { get; set; }
         public string FirstName { get; set; }
         public string LastName { get; set; }
-        public int Version { get; set; }
     }
 }
