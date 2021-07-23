@@ -8,7 +8,7 @@ namespace MongoDb.ConcurrencyControl.OptimisticCollection
 {
     //use library from https://github.com/Anapher/MongoDB.Concurrency
     /*
-     1. Entity class must have a property of type int (typically called Version)
+     1. Entity class must have a property of type int (typically called Version), or implement IVersionedEntity (not recommend)
      2. When updating an entity, use the .Optimistic() extension method and supply a reference to the version property
     */
     public class PersonRepository
