@@ -14,6 +14,7 @@ namespace MongoDb.ConcurrencyControl.Data.Repositories
 
         public static IPerson Create(BaseEntity<IPerson> baseEntity)
         {
+            //Creates an object instance that derives from class VersionControlProxy<IPerson> and implements interface IPerson
             var proxy = Create<IPerson, VersionControlProxy<IPerson>>();
 
             if (proxy is VersionControlProxy<IPerson> vcp)
