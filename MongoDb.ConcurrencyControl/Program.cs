@@ -1,7 +1,5 @@
-﻿using MongoDb.ConcurrencyControl.Data;
-using MongoDb.ConcurrencyControl.Data.Models;
-using MongoDb.ConcurrencyControl.Data.Repositories;
-using MongoDB.Concurrency.Optimistic;
+﻿using MongoDb.PessimisticConcurrency;
+using MongoDb.PessimisticConcurrency.Model;
 using MongoDB.Driver;
 using Newtonsoft.Json;
 using Polly;
@@ -16,60 +14,32 @@ namespace MongoDb.ConcurrencyControl
 
         static async Task Main(string[] args)
         {
-            MongoDbContext.RegisterClassMap();
 
-            await TestProxyWrapper();
+            await Test();
 
             Console.Read();
         }
 
-        private async static Task TestProxyWrapper()
+        private static async Task Test()
         {
-            IPerson person = new Person
+            var accountRepo = new AccountRepository();
+            var account = new Account
             {
-                Id = Guid.NewGuid().ToString(),
-                FirstName = "Alan",
-                LastName = "Smith",
-                Age = 20
+                AccountNumber = Guid.NewGuid().ToString(),
+                AccountName = "AlanSmith",
+                Balance = 100.0m
             };
 
-            Console.WriteLine("Test 1: insert new person");
-            person = await PersonRepository.UpsertAsync(person);
-            Console.WriteLine($"Inserted person: {PrintPerson(person)}");
+            await accountRepo.Add(account);
 
-            Console.WriteLine();
-            Console.WriteLine("Test 2: update person");
-            Console.WriteLine($"Before update: {PrintPerson(person)}");
-            person.Age++;
-            person = await PersonRepository.UpsertAsync(person);
-            Console.WriteLine($"After update: {PrintPerson(person)}");
-
-            Console.WriteLine();
-            Console.WriteLine("Test 3: update conflict");
-            var thread1 = await PersonRepository.Get(person.Id);
-            var thread2 = await PersonRepository.Get(person.Id);
-
-            thread1.FirstName = "Bob";
-            thread1 = await PersonRepository.UpsertAsync(thread1);
-            Console.WriteLine($"thread 1 update: {PrintPerson(thread1)}");
-
-            try
+            var tasks = Enumerable.Range(0, 1).Select(async i =>
             {
-                thread2.LastName = "Carter";
-                await PersonRepository.UpsertAsync(thread2);
-            }
-            catch (ConflictException ex)
-            {
-                Console.WriteLine($"thread 2 update: {ex.Message}");
-            }
+                await accountRepo.Debit(account.AccountNumber, 10.0m);
+            }).ToList();
+
+            await Task.WhenAll(tasks);
         }
 
-        private static string PrintPerson(IPerson person)
-        {
-            if (person is VersionControlProxy<IPerson> vcp)
-                return $"Version: {vcp.Version} - {JsonConvert.SerializeObject(vcp.Target)} " ;
 
-            return JsonConvert.SerializeObject(person);
-        }
     }
 }
