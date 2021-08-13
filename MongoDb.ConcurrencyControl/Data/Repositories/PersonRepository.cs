@@ -1,4 +1,5 @@
 ﻿using MongoDb.ConcurrencyControl.Data.Models;
+using MongoDb.ConcurrencyControl.Exceptions;
 using MongoDB.Driver;
 using System;
 using System.Threading.Tasks;
@@ -37,7 +38,7 @@ namespace MongoDb.ConcurrencyControl.Data.Repositories
 
             if (result.ModifiedCount != 1)
             {
-                throw new ConflictException();
+                throw new ConcurrencyConflictException();
             }
         }
     }

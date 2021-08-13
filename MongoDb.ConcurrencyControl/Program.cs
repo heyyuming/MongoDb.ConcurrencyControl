@@ -1,5 +1,6 @@
 ﻿using MongoDb.ConcurrencyControl.Data.Models;
 using MongoDb.ConcurrencyControl.Data.Repositories;
+using MongoDb.ConcurrencyControl.Exceptions;
 using MongoDB.Concurrency.Optimistic;
 using MongoDB.Driver;
 using Newtonsoft.Json;
@@ -25,7 +26,7 @@ namespace MongoDb.ConcurrencyControl
 
             //await OccWithVersionAndRetry();
 
-            await TestOptimisticCollection();
+            await TestOptimisticUsingThirdPartyLib();
 
             Console.Read();
         }
@@ -117,7 +118,7 @@ namespace MongoDb.ConcurrencyControl
 
             var tasks = Enumerable.Range(0, ConcurrentThreads).Select(async i =>
             {
-                await Policy.Handle<ConflictException>().RetryForeverAsync().ExecuteAsync(async () =>
+                await Policy.Handle<ConcurrencyConflictException>().RetryForeverAsync().ExecuteAsync(async () =>
                 {
                     var loaded = await personRepository.Get(person.Id);
                     var currentVersion = loaded.Version;
@@ -137,7 +138,7 @@ namespace MongoDb.ConcurrencyControl
             Console.WriteLine($"Expected Age    : {tasks.Count}");
         }
 
-        private static async Task TestOptimisticCollection()
+        private static async Task TestOptimisticUsingThirdPartyLib()
         {
             var person = new Person
             {
@@ -146,12 +147,12 @@ namespace MongoDb.ConcurrencyControl
                 LastName = "Smith"
             };
 
-            var optimisticRepo = new OptimisticCollection.PersonRepository();
+            var optimisticRepo = new Data.Repositories.OptimisticUsingThirdPartyLib.PersonRepository();
 
             Console.WriteLine("Case 1: entity does not exist and upsert is false");
             try
             {
-                await optimisticRepo.UpdateAsync(person, isUpsert: false);    
+                await optimisticRepo.UpdateAsync(person, isUpsert: false);
             }
             catch (MongoConcurrencyDeletedException ex)
             {

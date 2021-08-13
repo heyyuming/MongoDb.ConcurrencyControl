@@ -1,10 +1,9 @@
-﻿using MongoDb.ConcurrencyControl.Data;
-using MongoDb.ConcurrencyControl.Data.Models;
+﻿using MongoDb.ConcurrencyControl.Data.Models;
 using MongoDB.Concurrency;
 using MongoDB.Driver;
 using System.Threading.Tasks;
 
-namespace MongoDb.ConcurrencyControl.OptimisticCollection
+namespace MongoDb.ConcurrencyControl.Data.Repositories.OptimisticUsingThirdPartyLib
 {
     //use library from https://github.com/Anapher/MongoDB.Concurrency
     /*
