@@ -15,12 +15,12 @@ namespace MongoDb.ConcurrencyControl
         static async Task Main(string[] args)
         {
 
-            await Test();
+            await DebitAccount(false);
 
             Console.Read();
         }
 
-        private static async Task Test()
+        private static async Task DebitAccount(bool retry)
         {
             var accountRepo = new AccountRepository();
             var account = new Account
@@ -32,9 +32,24 @@ namespace MongoDb.ConcurrencyControl
 
             await accountRepo.Add(account);
 
-            var tasks = Enumerable.Range(0, 1).Select(async i =>
+            var tasks = Enumerable.Range(0, 3).Select(async i =>
             {
-                await accountRepo.Debit(account.AccountNumber, 10.0m);
+                await Policy.Handle<MongoDB.Driver.MongoCommandException>().RetryForeverAsync().ExecuteAsync(async () =>
+                {
+                    try
+                    {
+                        await accountRepo.Debit(account.AccountNumber, 10.0m);
+                        Console.WriteLine($"Task {i} debit successfully.");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Task {i} failed with: {ex.Message}");
+                        if (retry)
+                        {
+                            throw;
+                        }
+                    }
+                });
             }).ToList();
 
             await Task.WhenAll(tasks);
