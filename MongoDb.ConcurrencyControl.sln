@@ -8,9 +8,10 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{A5E2C53B-D6CB-4A89-9F1F-1B7106BA8D5F}"
 	ProjectSection(SolutionItems) = preProject
 		docker-compose.yml = docker-compose.yml
+		docker-setup\setup.sh = docker-setup\setup.sh
 	EndProjectSection
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "MongoDb.PessimisticConcurrency", "MongoDb.PessimisticConcurrency\MongoDb.PessimisticConcurrency.csproj", "{E46E6DDE-3DBE-4731-B326-606739CA9722}"
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "MongoDb.PessimisticConcurrency", "MongoDb.PessimisticConcurrency\MongoDb.PessimisticConcurrency.csproj", "{E46E6DDE-3DBE-4731-B326-606739CA9722}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

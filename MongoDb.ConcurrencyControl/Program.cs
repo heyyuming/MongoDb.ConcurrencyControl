@@ -14,10 +14,37 @@ namespace MongoDb.ConcurrencyControl
 
         static async Task Main(string[] args)
         {
-
-            await DebitAccount(false);
+            await Transfer();
+            //await DebitAccount(false);
 
             Console.Read();
+        }
+
+        private static async Task Transfer()
+        {
+            var fromAccount = await SetupAccount(new Account
+            {
+                AccountNumber = Guid.NewGuid().ToString(),
+                AccountName = "Alan",
+                Balance = 100.0m
+            });
+
+            var toAccount = await SetupAccount(new Account
+            {
+                AccountNumber = Guid.NewGuid().ToString(),
+                AccountName = "Bob",
+                Balance = 10.0m
+            });
+
+            var transactionService = new AccountTransactionService();
+            await transactionService.Transfer(fromAccount, toAccount, 30.0m);
+
+        }
+
+        private static Task<Account> SetupAccount(Account account)
+        {
+            var accountRepo = new AccountRepository();
+            return accountRepo.Add(account);
         }
 
         private static async Task DebitAccount(bool retry)

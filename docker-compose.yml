@@ -1,9 +1,37 @@
 version: '3.8'
 
 services:
-  mongo:
-    image: mongo:latest
-    restart: always
-    container_name: mongo
+  mongo-setup:
+    container_name: mongo-setup
+    image: mongo
+    restart: on-failure
+    volumes:
+      - ./docker-setup:/scripts
+    entrypoint: ["bash", "./scripts/setup.sh" ]
+    depends_on:
+      - primary
+      - replica
+  
+  primary:
+    hostname: primary
+    container_name: primary
+    image: mongo
+    expose:
+      - 27017
     ports:
       - 27017:27017
+    restart: always
+    volumes:
+      - ./setup:/docker-entrypoint-initdb.d
+    entrypoint: [ "/usr/bin/mongod", "--bind_ip_all", "--replSet", "rs0", "--journal", "--dbpath", "/data/db", "--enableMajorityReadConcern", "true" ]
+  
+  replica:
+    hostname: replica
+    container_name: replica
+    image: mongo
+    expose:
+      - 27018
+    ports:
+      - 27018:27017
+    restart: always
+    entrypoint: [ "/usr/bin/mongod", "--bind_ip_all", "--replSet", "rs0", "--journal", "--dbpath", "/data/db", "--enableMajorityReadConcern", "true" ]
