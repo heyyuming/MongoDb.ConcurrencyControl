@@ -41,14 +41,14 @@ namespace MongoDb.ConcurrencyControl
             });
 
             // this will read data without waiting for the data to be committed. 
-            var readTask = accountRepository.Read(account.AccountNumber);
+            var availableTask = accountRepository.Read(account.AccountNumber, ReadConcern.Available);
+            var linearizableTask = accountRepository.Read(account.AccountNumber, ReadConcern.Linearizable);
+            var majorityTask = accountRepository.Read(account.AccountNumber, ReadConcern.Majority);
+            var snapshotTask = accountRepository.Read(account.AccountNumber, ReadConcern.Snapshot);
+            var localTask = accountRepository.Read(account.AccountNumber, ReadConcern.Local);
 
-            // this read will wait for the write to finish first. 
-            var readCommittedTask = accountRepository.ReadCommitted(account.AccountNumber);
+            await Task.WhenAll(writeTask, availableTask, linearizableTask, majorityTask, snapshotTask, localTask);
 
-            await Task.WhenAll(writeTask, readTask, readCommittedTask);
-
-            Console.WriteLine($"Task debit successfully.");
         }
 
         private static async Task DebitAccount(bool retry, Account account)

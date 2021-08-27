@@ -13,30 +13,17 @@ namespace MongoDb.PessimisticConcurrency
             return MongoDbContext.Accounts.InsertOneAsync(account);
         }
 
-        public async Task<Account> Read(string accountNumber)
+        public async Task<Account> Read(string accountNumber, ReadConcern readConcern)
         {
             await Task.Delay(1000);
 
-            var account = (await MongoDbContext.Accounts.FindAsync(a => a.AccountNumber == accountNumber)).FirstOrDefault();
+            var account = (await MongoDbContext.Accounts
+                .WithReadConcern(readConcern)
+                .FindAsync(a => a.AccountNumber == accountNumber)).FirstOrDefault();
 
-            Console.WriteLine("***************** Simple Read Completed***********************");
+            Console.WriteLine($"***************** Reading with ReadConcern: {readConcern.ToString()}***********************");
             Console.WriteLine(JsonConvert.SerializeObject(account, Formatting.Indented));
             Console.WriteLine("**************************** END **********************************");
-            return account;
-        }
-
-        public async Task<Account> ReadCommitted(string accountNumber)
-        {
-            await Task.Delay(1000);
-
-            var updateDef = Builders<Account>.Update.Set(a => a.ETag, Guid.NewGuid());
-
-            var account = await MongoDbContext.Accounts.FindOneAndUpdateAsync(a => a.AccountNumber == accountNumber, updateDef);
-
-            Console.WriteLine("***************** Read committed data completed ***********************");
-            Console.WriteLine(JsonConvert.SerializeObject(account, Formatting.Indented));
-            Console.WriteLine("********************************** END ****************************************");
-
             return account;
         }
 
