@@ -1,6 +1,7 @@
 ﻿using MongoDb.PessimisticConcurrency.Model;
 using MongoDB.Driver;
 using System;
+using System.Threading.Tasks;
 
 namespace MongoDb.PessimisticConcurrency
 {
@@ -8,10 +9,10 @@ namespace MongoDb.PessimisticConcurrency
     {
         private const string ConnectionString = "mongodb://localhost:27017";
 
-        private static Lazy<IMongoCollection<Account>> _collection => 
+        private static Lazy<IMongoCollection<Account>> _collection =>
             new Lazy<IMongoCollection<Account>>(() => MongoClient.GetDatabase("PessimisticConcurrency").GetCollection<Account>(nameof(Account)));
 
-        private static Lazy<MongoClient> _mongoClient => 
+        private static Lazy<MongoClient> _mongoClient =>
             new Lazy<MongoClient>(() => new MongoClient(ConnectionString));
 
         public static IMongoCollection<Account> Accounts
@@ -22,6 +23,41 @@ namespace MongoDb.PessimisticConcurrency
         public static MongoClient MongoClient
         {
             get { return _mongoClient.Value; }
+        }
+
+
+        public static async Task UsingTransaction(
+            Func<IClientSessionHandle, Task> action,
+            ReadConcern readConcern = null,
+            WriteConcern writeConcern = null)
+        {
+
+            readConcern ??= ReadConcern.Local;
+            writeConcern ??= WriteConcern.W1;
+
+            using var session = await MongoClient.StartSessionAsync();
+            var transactionOptions = new TransactionOptions(readConcern: readConcern, writeConcern: writeConcern);
+            session.StartTransaction(transactionOptions);
+
+            try
+            {
+                await action(session);
+
+                session.CommitTransaction();
+
+                Console.WriteLine("");
+                Console.WriteLine("");
+
+                Console.WriteLine("Transction Committed");
+
+                Console.WriteLine("");
+                Console.WriteLine("");
+            }
+            catch (Exception)
+            {
+                await session.AbortTransactionAsync();
+                throw;
+            }
         }
     }
 }

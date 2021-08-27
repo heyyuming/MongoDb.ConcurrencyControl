@@ -1,8 +1,6 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
+using System;
 
 namespace MongoDb.PessimisticConcurrency.Model
 {
@@ -11,6 +9,8 @@ namespace MongoDb.PessimisticConcurrency.Model
         public Guid Id { get; set; }
         public string AccountNumber { get; set; }
         public string AccountName { get; set; }
+
+        [BsonRepresentation(BsonType.Decimal128)]
         public decimal Balance { get; set; }
         public Guid ETag { get; set; }
     }

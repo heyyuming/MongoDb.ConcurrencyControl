@@ -1,5 +1,6 @@
 ﻿using MongoDb.PessimisticConcurrency.Model;
 using MongoDB.Driver;
+using Newtonsoft.Json;
 using System;
 using System.Threading.Tasks;
 
@@ -11,6 +12,43 @@ namespace MongoDb.PessimisticConcurrency
         {
             return MongoDbContext.Accounts.InsertOneAsync(account);
         }
+
+        public async Task<Account> Read(string accountNumber)
+        {
+            await Task.Delay(1000);
+
+            var account = (await MongoDbContext.Accounts.FindAsync(a => a.AccountNumber == accountNumber)).FirstOrDefault();
+
+            Console.WriteLine("***************** Simple Read Completed***********************");
+            Console.WriteLine(JsonConvert.SerializeObject(account, Formatting.Indented));
+            Console.WriteLine("**************************** END **********************************");
+            return account;
+        }
+
+        public async Task<Account> ReadCommitted(string accountNumber)
+        {
+            await Task.Delay(1000);
+
+            var updateDef = Builders<Account>.Update.Set(a => a.ETag, Guid.NewGuid());
+
+            var account = await MongoDbContext.Accounts.FindOneAndUpdateAsync(a => a.AccountNumber == accountNumber, updateDef);
+
+            Console.WriteLine("***************** Read with read concern completed Start ***********************");
+            Console.WriteLine(JsonConvert.SerializeObject(account, Formatting.Indented));
+            Console.WriteLine("********************************** END ****************************************");
+
+            return account;
+        }
+
+        public async Task Debit(string accountNumber, decimal amount, IClientSessionHandle session)
+        {
+            var updateDef = Builders<Account>.Update.Set(a => a.AccountName, "abc").Inc(a => a.Balance, -amount);
+
+            var loadedAccount = await MongoDbContext.Accounts.FindOneAndUpdateAsync(session, a => a.AccountNumber == accountNumber, updateDef);
+
+            await Task.Delay(5000);
+        }
+
 
         public async Task Debit(string accountNumber, decimal amount)
         {
