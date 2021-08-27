@@ -32,6 +32,6 @@ services:
     expose:
       - 27018
     ports:
-      - 27018:27018
+      - 27018:27017
     restart: always
     entrypoint: [ "/usr/bin/mongod", "--bind_ip_all", "--replSet", "rs0", "--journal", "--dbpath", "/data/db", "--enableMajorityReadConcern", "true" ]
