@@ -47,6 +47,7 @@ namespace MongoDb.ConcurrencyControl
             var readCommittedTask = accountRepository.ReadCommitted(account.AccountNumber);
 
             await Task.WhenAll(writeTask, readTask, readCommittedTask);
+
             Console.WriteLine($"Task debit successfully.");
         }
 

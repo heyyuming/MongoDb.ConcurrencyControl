@@ -33,7 +33,7 @@ namespace MongoDb.PessimisticConcurrency
 
             var account = await MongoDbContext.Accounts.FindOneAndUpdateAsync(a => a.AccountNumber == accountNumber, updateDef);
 
-            Console.WriteLine("***************** Read with read concern completed Start ***********************");
+            Console.WriteLine("***************** Read committed data completed ***********************");
             Console.WriteLine(JsonConvert.SerializeObject(account, Formatting.Indented));
             Console.WriteLine("********************************** END ****************************************");
 
@@ -42,11 +42,14 @@ namespace MongoDb.PessimisticConcurrency
 
         public async Task Debit(string accountNumber, decimal amount, IClientSessionHandle session)
         {
+            Console.WriteLine("Start writing");
+
             var updateDef = Builders<Account>.Update.Set(a => a.AccountName, "abc").Inc(a => a.Balance, -amount);
 
             var loadedAccount = await MongoDbContext.Accounts.FindOneAndUpdateAsync(session, a => a.AccountNumber == accountNumber, updateDef);
 
             await Task.Delay(5000);
+            Console.WriteLine("End writing");
         }
 
 

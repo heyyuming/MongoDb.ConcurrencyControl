@@ -38,18 +38,17 @@ namespace MongoDb.PessimisticConcurrency
             using var session = await MongoClient.StartSessionAsync();
             var transactionOptions = new TransactionOptions(readConcern: readConcern, writeConcern: writeConcern);
             session.StartTransaction(transactionOptions);
-
             try
             {
+                Console.WriteLine("");
+                Console.WriteLine("");
+
+                Console.WriteLine("Transaction started");
                 await action(session);
 
                 session.CommitTransaction();
 
-                Console.WriteLine("");
-                Console.WriteLine("");
-
-                Console.WriteLine("Transction Committed");
-
+                Console.WriteLine("Transaction Committed");
                 Console.WriteLine("");
                 Console.WriteLine("");
             }
