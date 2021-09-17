@@ -29,29 +29,40 @@ namespace MongoDb.PessimisticConcurrency
         {
             await Task.Delay(1000);
 
-            var updateDef = Builders<Account>.Update.Set(a => a.ETag, Guid.NewGuid());
+            try
+            {
+                var update = Builders<Account>.Update.Set(a => a.ETag, Guid.NewGuid());
+                var filter = Builders<Account>.Filter.Where(a => a.AccountNumber == accountNumber);
 
-            var account = await MongoDbContext.Accounts.FindOneAndUpdateAsync(a => a.AccountNumber == accountNumber, updateDef);
+                var account = await MongoDbContext.Accounts.FindOneAndUpdateAsync(filter, update, new FindOneAndUpdateOptions<Account, Account>
+                {
+                    MaxTime = TimeSpan.FromSeconds(2)
+                });
+                Console.WriteLine("***************** Read committed data completed ***********************");
+                Console.WriteLine(JsonConvert.SerializeObject(account, Formatting.Indented));
+                Console.WriteLine("********************************** END ****************************************");
 
-            Console.WriteLine("***************** Read committed data completed ***********************");
-            Console.WriteLine(JsonConvert.SerializeObject(account, Formatting.Indented));
-            Console.WriteLine("********************************** END ****************************************");
-
-            return account;
+                return account;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"ReadCommitted: {ex.Message}");
+                throw;
+            }
         }
 
-        public async Task Debit(string accountNumber, decimal amount, IClientSessionHandle session)
+        public async Task Write(string accountNumber, decimal amount, IClientSessionHandle session)
         {
             Console.WriteLine("Start writing");
 
-            var updateDef = Builders<Account>.Update.Set(a => a.AccountName, "abc").Inc(a => a.Balance, -amount);
+            var update = Builders<Account>.Update.Set(a => a.AccountName, "abc").Inc(a => a.Balance, -amount);
+            var filter = Builders<Account>.Filter.Where(a => a.AccountNumber == accountNumber);
 
-            var loadedAccount = await MongoDbContext.Accounts.FindOneAndUpdateAsync(session, a => a.AccountNumber == accountNumber, updateDef);
+            var loadedAccount = await MongoDbContext.Accounts.FindOneAndUpdateAsync(session, filter, update);
 
-            await Task.Delay(5000);
+            await Task.Delay(3000);
             Console.WriteLine("End writing");
         }
-
 
         public async Task Debit(string accountNumber, decimal amount)
         {
